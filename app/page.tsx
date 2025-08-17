@@ -511,7 +511,7 @@ export default function CombinedGeneratorApp() {
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-card-foreground">
-                    Expiration Date (MM/YY)
+                    (MM/YY)
                   </label>
                   <Input
                     type="text"
