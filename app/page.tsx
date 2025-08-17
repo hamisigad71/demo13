@@ -472,7 +472,7 @@ export default function CombinedGeneratorApp() {
         <Card className="bg-card/90 backdrop-blur-sm border-border/50 shadow-2xl">
           <CardHeader className="bg-gradient-to-r from-primary/5 via-secondary/5 to-primary/5 rounded-t-lg border-b border-border/50">
             <CardTitle className="text-3xl font-bold text-card-foreground flex items-center gap-3">
-              💳 Secure Payment & Card Simulator
+              💳 Card Simulator
             </CardTitle>
             <p className="text-muted-foreground mt-2">
               Complete your payment to unlock premium number generation features
