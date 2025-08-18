@@ -679,16 +679,6 @@ export default function CombinedGeneratorApp() {
                 </div>
               </div>
 
-              <div className="text-center mb-12 mt-8">
-                <Button
-                  onClick={masterShuffle}
-                  size="lg"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-12 py-4 h-14 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                >
-                  🎲 Master Shuffle
-                </Button>
-              </div>
-
               <Button
                 type="submit"
                 className="w-full h-16 text-lg font-semibold bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-4"
@@ -696,6 +686,16 @@ export default function CombinedGeneratorApp() {
                 🔍 Validate Card Information
               </Button>
             </form>
+
+            <div className="text-center mb-12 mt-8">
+              <Button
+                onClick={masterShuffle}
+                size="lg"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-12 py-4 h-14 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+              >
+                🎲 Master Shuffle
+              </Button>
+            </div>
 
             <div className="mt-10 border-t border-border/50 pt-8">
               <div className="text-center mb-6">
