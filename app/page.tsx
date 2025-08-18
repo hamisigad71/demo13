@@ -107,6 +107,8 @@ export default function CombinedGeneratorApp() {
     message: string;
   } | null>(null);
 
+  const [isExpiryManuallyEntered, setIsExpiryManuallyEntered] = useState(false);
+
   // PayPal payment state
   const [isPayPalLoaded, setIsPayPalLoaded] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("10.00");
@@ -170,14 +172,16 @@ export default function CombinedGeneratorApp() {
 
   const masterShuffle = () => {
     numberShuffleAndSelect();
-    dateShuffleAndSelect();
+    if (!isExpiryManuallyEntered) {
+      dateShuffleAndSelect();
+    }
   };
 
   const updateExternalInputs = (number: string, date: string) => {
     if (number) {
       setCvv(number.slice(-3));
     }
-    if (date) {
+    if (date && !isExpiryManuallyEntered) {
       setExpiryDate(date);
     }
   };
@@ -190,26 +194,7 @@ export default function CombinedGeneratorApp() {
     }
 
     setExpiryDate(value);
-  };
-
-  const numberExportCSV = () => {
-    const csv = currentNumbers.join(",");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "numbers_123_to_999.csv";
-    a.click();
-  };
-
-  const dateExportCSV = () => {
-    const csv = currentDates.join(",");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "months_2026_to_2030.csv";
-    a.click();
+    setIsExpiryManuallyEntered(true);
   };
 
   const validateCardNumber = (
@@ -459,16 +444,6 @@ export default function CombinedGeneratorApp() {
           </h1>
         </div>
 
-        <div className="text-center mb-12">
-          <Button
-            onClick={masterShuffle}
-            size="lg"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-          >
-            🎲 Master Shuffle
-          </Button>
-        </div>
-
         <Card className="bg-card/90 backdrop-blur-sm border-border/50 shadow-2xl">
           <CardHeader className="bg-gradient-to-r from-primary/5 via-secondary/5 to-primary/5 rounded-t-lg border-b border-border/50">
             <CardTitle className="text-3xl font-bold text-card-foreground flex items-center gap-3">
@@ -540,11 +515,21 @@ export default function CombinedGeneratorApp() {
 
               <Button
                 type="submit"
-                className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200"
+                className="w-full h-16 text-lg font-semibold bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-4"
               >
                 🔍 Validate Card Information
               </Button>
             </form>
+
+            <div className="text-center mb-12 mt-8">
+              <Button
+                onClick={masterShuffle}
+                size="lg"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-12 py-4 h-14 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+              >
+                🎲 Master Shuffle
+              </Button>
+            </div>
 
             <div className="mt-10 border-t border-border/50 pt-8">
               <div className="text-center mb-6">
@@ -597,7 +582,15 @@ export default function CombinedGeneratorApp() {
               </CardTitle>
               <div className="flex gap-3 mt-4">
                 <Button
-                  onClick={numberExportCSV}
+                  onClick={() => {
+                    const csv = allNumbers.join(",");
+                    const blob = new Blob([csv], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "numbers_123_to_999.csv";
+                    a.click();
+                  }}
                   variant="outline"
                   size="sm"
                   className="border-primary/20 hover:bg-primary/10 hover:border-primary/40 bg-transparent"
@@ -609,7 +602,7 @@ export default function CombinedGeneratorApp() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="text-center">
                     <div className="font-bold text-lg text-primary">
-                      {currentNumbers.length}
+                      {allNumbers.length}
                     </div>
                     <div className="text-muted-foreground">Total Numbers</div>
                   </div>
@@ -625,7 +618,7 @@ export default function CombinedGeneratorApp() {
             <CardContent className="p-6">
               <div className="max-h-80 overflow-y-auto border border-border/50 rounded-lg p-4 mb-6 bg-muted/20">
                 <div className="flex flex-wrap gap-2">
-                  {currentNumbers.map((num) => (
+                  {allNumbers.map((num) => (
                     <span
                       key={num}
                       className={`px-3 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
@@ -665,7 +658,15 @@ export default function CombinedGeneratorApp() {
               </CardTitle>
               <div className="flex gap-3 mt-4">
                 <Button
-                  onClick={dateExportCSV}
+                  onClick={() => {
+                    const csv = allDates.join(",");
+                    const blob = new Blob([csv], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "months_2026_to_2030.csv";
+                    a.click();
+                  }}
                   variant="outline"
                   size="sm"
                   className="border-secondary/20 hover:bg-secondary/10 hover:border-secondary/40 bg-transparent"
@@ -677,7 +678,7 @@ export default function CombinedGeneratorApp() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="text-center">
                     <div className="font-bold text-lg text-secondary">
-                      {currentDates.length}
+                      {allDates.length}
                     </div>
                     <div className="text-muted-foreground">Total Dates</div>
                   </div>
@@ -693,7 +694,7 @@ export default function CombinedGeneratorApp() {
             <CardContent className="p-6">
               <div className="max-h-80 overflow-y-auto border border-border/50 rounded-lg p-4 mb-6 bg-muted/20">
                 <div className="flex flex-wrap gap-2">
-                  {currentDates.map((date) => (
+                  {allDates.map((date) => (
                     <span
                       key={date}
                       className={`px-3 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
