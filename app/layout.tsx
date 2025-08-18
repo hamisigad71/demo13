@@ -5,12 +5,8 @@ import { GeistMono } from "geist/font/mono";
 import { ThemeProvider } from "next-themes";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Script from "next/script";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "v0 App",
@@ -24,20 +20,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${inter.className} ${GeistSans.variable} ${GeistMono.variable}`}
-      suppressHydrationWarning // Add this to suppress hydration warnings
-    >
+    <html lang="en">
       <head>
         <style>{`
-          :root {
-            --font-sans: ${GeistSans.variable};
-            --font-mono: ${GeistMono.variable};
-          }
+html {
+  font-family: ${GeistSans.style.fontFamily};
+  --font-sans: ${GeistSans.variable};
+  --font-mono: ${GeistMono.variable};
+}
         `}</style>
       </head>
-      <body>
+      <body className={inter.className}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -46,10 +39,11 @@ export default function RootLayout({
         >
           {children}
         </ThemeProvider>
-        <Script
+        <script
           src="https://www.paypal.com/sdk/js?client-id=AeK2GE53XcONEKKRB33IFEW6sDmJrywHU_oBwWlW3EFpXvxqsE-y8DvMcGCtzA2RAB-1ovDRHgeIsSRR&currency=USD&intent=capture&enable-funding=venmo,paylater"
-          strategy="lazyOnload" // Changed to lazyOnload for better performance
-        />
+          async
+        ></script>
+        <script src="https://js.stripe.com/v3/" async></script>
       </body>
     </html>
   );

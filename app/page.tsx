@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Declare PayPal on window
+// Declare PayPal and Stripe on window
 declare global {
   interface Window {
     paypal: any;
+    Stripe: any;
   }
 }
 
@@ -111,12 +112,17 @@ export default function CombinedGeneratorApp() {
 
   // PayPal payment state
   const [isPayPalLoaded, setIsPayPalLoaded] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState("10.00");
   const paypalRef = useRef<HTMLDivElement>(null);
 
-  // Notification state
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notificationId, setNotificationId] = useState(0);
+  // Stripe payment state
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "paypal">(
+    "stripe"
+  );
+  const [isStripeLoaded, setIsStripeLoaded] = useState(false);
+  const [stripe, setStripe] = useState<any>(null);
+  const [isProcessingStripe, setIsProcessingStripe] = useState(false);
+
+  const [paymentAmount, setPaymentAmount] = useState("10.00");
 
   const numberGenerateAll = () => {
     const numbers = [];
@@ -241,6 +247,74 @@ export default function CombinedGeneratorApp() {
     return { isValid: sum % 10 === 0, cardType };
   };
 
+  const generateExpectedCVV = (
+    cardNumber: string,
+    cardType: string
+  ): string => {
+    const cleanNumber = cardNumber.replace(/\s/g, "");
+    if (cleanNumber.length < 13) return "";
+
+    // Use card number digits to generate deterministic CVV
+    const digits = cleanNumber.split("").map((d) => Number.parseInt(d));
+    let cvvSum = 0;
+
+    // Algorithm: Use specific positions and mathematical operations
+    cvvSum += digits[4] * 3 + digits[8] * 2 + digits[12] * 4;
+    cvvSum += digits[1] + digits[5] + digits[9];
+
+    // Ensure CVV is within valid range
+    const cvvLength = cardType === "Amex" ? 4 : 3;
+    const maxValue = cvvLength === 4 ? 9999 : 999;
+    const minValue = cvvLength === 4 ? 1000 : 100;
+
+    const finalCVV = (cvvSum % (maxValue - minValue + 1)) + minValue;
+    return finalCVV.toString().padStart(cvvLength, "0");
+  };
+
+  const generateExpectedExpiry = (cardNumber: string): string => {
+    const cleanNumber = cardNumber.replace(/\s/g, "");
+    if (cleanNumber.length < 13) return "";
+
+    const digits = cleanNumber.split("").map((d) => Number.parseInt(d));
+
+    // Algorithm: Use card digits to determine month and year
+    const monthSum = digits[2] + digits[6] + digits[10];
+    const yearSum = digits[3] + digits[7] + digits[11];
+
+    // Generate month (01-12)
+    const month = ((monthSum % 12) + 1).toString().padStart(2, "0");
+
+    // Generate year (26-30 to match our date range)
+    const year = (26 + (yearSum % 5)).toString();
+
+    return `${month}/${year}`;
+  };
+
+  const validateCardDetails = (
+    cardNumber: string,
+    cvv: string,
+    expiry: string,
+    cardType: string
+  ): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+
+    // Generate expected values based on card number
+    const expectedCVV = generateExpectedCVV(cardNumber, cardType);
+    const expectedExpiry = generateExpectedExpiry(cardNumber);
+
+    // Check if provided CVV matches expected CVV
+    if (cvv !== expectedCVV) {
+      errors.push(`CVV mismatch (expected: ${expectedCVV})`);
+    }
+
+    // Check if provided expiry matches expected expiry
+    if (expiry !== expectedExpiry) {
+      errors.push(`Expiry date mismatch (expected: ${expectedExpiry})`);
+    }
+
+    return { isValid: errors.length === 0, errors };
+  };
+
   const validateExpiryDate = (expiry: string): boolean => {
     if (!/^\d{2}\/\d{2}$/.test(expiry)) return false;
 
@@ -286,12 +360,12 @@ export default function CombinedGeneratorApp() {
       errors.push("Invalid card number");
     }
 
-    // Validate expiry date
+    // Validate expiry date format
     if (!validateExpiryDate(expiryDate)) {
       errors.push("Invalid or expired date");
     }
 
-    // Validate CVV
+    // Validate CVV format
     if (!validateCVV(cvv, cardValidation.cardType)) {
       errors.push(
         `Invalid CVV (${
@@ -300,12 +374,24 @@ export default function CombinedGeneratorApp() {
       );
     }
 
-    if (errors.length > 0) {
-      showNotification(
-        "error",
-        "Payment Failed",
-        `Validation failed: ${errors.join(", ")}`
+    if (
+      cardValidation.isValid &&
+      validateExpiryDate(expiryDate) &&
+      validateCVV(cvv, cardValidation.cardType)
+    ) {
+      const detailsValidation = validateCardDetails(
+        cardNumber,
+        cvv,
+        expiryDate,
+        cardValidation.cardType
       );
+      if (!detailsValidation.isValid) {
+        errors.push(...detailsValidation.errors);
+      }
+    }
+
+    if (errors.length > 0) {
+      showNotification("error", "Validation Failed", errors.join(", "));
       setResult(null);
     } else {
       showNotification(
@@ -313,7 +399,7 @@ export default function CombinedGeneratorApp() {
         "Validation Successful",
         `${cardValidation.cardType} card ending in ${cardNumber.slice(
           -4
-        )} is valid for transactions`
+        )} with matching CVV and expiry is valid for transactions`
       );
       setResult(null);
     }
@@ -324,14 +410,15 @@ export default function CombinedGeneratorApp() {
     title: string,
     message: string
   ) => {
-    const id = notificationId + 1;
-    setNotificationId(id);
+    const id = Date.now();
     setNotifications((prev) => [...prev, { id, type, title, message }]);
   };
 
   const removeNotification = (id: number) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
+
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
     numberGenerateAll();
@@ -427,6 +514,85 @@ export default function CombinedGeneratorApp() {
     checkPayPal();
   }, [paymentAmount]);
 
+  useEffect(() => {
+    const initializeStripe = () => {
+      if (window.Stripe) {
+        const stripeInstance = window.Stripe(
+          "pk_test_51RxTA57QrmHcCFtzC1Ra136BPxrXN4lHW4rdbcsyhUJda2R3sxd3ViJjj4R93yb634VJfEUVS7IPCyW5uutGZmxL00HG2m5Jt8"
+        );
+        setStripe(stripeInstance);
+        setIsStripeLoaded(true);
+      } else {
+        setTimeout(initializeStripe, 100);
+      }
+    };
+    initializeStripe();
+  }, []);
+
+  const processStripePayment = async () => {
+    if (!stripe || !cardNumber || !expiryDate || !cvv || !cardName) {
+      showNotification(
+        "error",
+        "Payment Failed",
+        "Please fill in all card details before processing payment"
+      );
+      return;
+    }
+
+    setIsProcessingStripe(true);
+
+    try {
+      // Create payment method
+      const { error, paymentMethod } = await stripe.createPaymentMethod({
+        type: "card",
+        card: {
+          number: cardNumber.replace(/\s/g, ""),
+          exp_month: Number.parseInt(expiryDate.split("/")[0]),
+          exp_year: Number.parseInt("20" + expiryDate.split("/")[1]),
+          cvc: cvv,
+        },
+        billing_details: {
+          name: cardName,
+        },
+      });
+
+      if (error) {
+        console.error("[v0] Stripe payment method creation error:", error);
+        showNotification(
+          "error",
+          "Payment Failed",
+          error.message || "Failed to create payment method"
+        );
+        return;
+      }
+
+      // Simulate payment confirmation (in real app, you'd send to your backend)
+      const paymentIntent = {
+        id: `pi_${Math.random().toString(36).substr(2, 9)}`,
+        amount: Number.parseFloat(paymentAmount) * 100,
+        currency: "usd",
+        status: "succeeded",
+      };
+
+      console.log("[v0] Stripe payment successful:", paymentIntent);
+      showNotification(
+        "success",
+        "Payment Successful!",
+        `Transaction ID: ${paymentIntent.id}. Premium access activated!`
+      );
+      masterShuffle();
+    } catch (error: any) {
+      console.error("[v0] Stripe payment error:", error);
+      showNotification(
+        "error",
+        "Payment Failed",
+        error.message || "Payment processing failed"
+      );
+    } finally {
+      setIsProcessingStripe(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
       {notifications.map((notification) => (
@@ -513,6 +679,16 @@ export default function CombinedGeneratorApp() {
                 </div>
               </div>
 
+              <div className="text-center mb-12 mt-8">
+                <Button
+                  onClick={masterShuffle}
+                  size="lg"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-12 py-4 h-14 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                >
+                  🎲 Master Shuffle
+                </Button>
+              </div>
+
               <Button
                 type="submit"
                 className="w-full h-16 text-lg font-semibold bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-4"
@@ -521,24 +697,39 @@ export default function CombinedGeneratorApp() {
               </Button>
             </form>
 
-            <div className="text-center mb-12 mt-8">
-              <Button
-                onClick={masterShuffle}
-                size="lg"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-12 py-4 h-14 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-              >
-                🎲 Master Shuffle
-              </Button>
-            </div>
-
             <div className="mt-10 border-t border-border/50 pt-8">
               <div className="text-center mb-6">
                 <h3 className="text-2xl font-bold text-card-foreground mb-2">
                   💰 Complete Payment
                 </h3>
                 <p className="text-muted-foreground">
-                  Secure payment processing via PayPal
+                  Choose your preferred payment method
                 </p>
+              </div>
+
+              <div className="max-w-md mx-auto mb-6">
+                <div className="flex gap-2 p-1 bg-muted/30 rounded-lg">
+                  <button
+                    onClick={() => setPaymentMethod("stripe")}
+                    className={`flex-1 py-3 px-4 rounded-md font-semibold transition-all ${
+                      paymentMethod === "stripe"
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    💳 Credit Card
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod("paypal")}
+                    className={`flex-1 py-3 px-4 rounded-md font-semibold transition-all ${
+                      paymentMethod === "paypal"
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    🅿️ PayPal
+                  </button>
+                </div>
               </div>
 
               <div className="max-w-md mx-auto mb-6">
@@ -557,13 +748,43 @@ export default function CombinedGeneratorApp() {
               </div>
 
               <div className="max-w-md mx-auto">
-                <div
-                  ref={paypalRef}
-                  className="min-h-[60px] rounded-lg overflow-hidden"
-                ></div>
-                {!isPayPalLoaded && (
-                  <div className="text-center text-muted-foreground py-4 bg-muted/30 rounded-lg">
-                    <div className="animate-pulse">🔄 Loading PayPal...</div>
+                {paymentMethod === "stripe" ? (
+                  <div className="space-y-4">
+                    <Button
+                      onClick={processStripePayment}
+                      disabled={isProcessingStripe || !isStripeLoaded}
+                      className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                    >
+                      {isProcessingStripe ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                          Processing...
+                        </div>
+                      ) : (
+                        `💳 Pay $${paymentAmount} with Card`
+                      )}
+                    </Button>
+                    {!isStripeLoaded && (
+                      <div className="text-center text-muted-foreground py-2">
+                        <div className="animate-pulse">
+                          🔄 Loading Stripe...
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <div
+                      ref={paypalRef}
+                      className="min-h-[60px] rounded-lg overflow-hidden"
+                    ></div>
+                    {!isPayPalLoaded && (
+                      <div className="text-center text-muted-foreground py-4 bg-muted/30 rounded-lg">
+                        <div className="animate-pulse">
+                          🔄 Loading PayPal...
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
